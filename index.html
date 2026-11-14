@@ -88,6 +88,9 @@
     .metodo .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: rgba(201,0,0,.10); color: var(--red); flex-shrink: 0; }
     .metodo h3 { font-size: 15px; font-weight: 700; }
     .metodo .det { font-size: 13px; color: var(--suave); }
+    .metodo .combinado { display: block; margin: 1px 0 2px; font-size: 11px; font-weight: 700; color: var(--red); vertical-align: middle; }
+    .mesmo-valor { font-size: 13px; color: var(--suave); margin: 10px 0 0; }
+    .trocar { margin-top: 10px; }
     .metodo .selo { margin-left: auto; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: rgba(34,197,94,.15); color: var(--success); white-space: nowrap; }
 
     .btn { width: 100%; min-height: 52px; padding: 14px 18px; border-radius: var(--radius-sm); font: 700 16px/1.2 inherit; font-family: inherit; letter-spacing: .02em; cursor: pointer; border: 0; display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; }
@@ -169,6 +172,7 @@
       <div id="bloco-escolha">
         <h1>Como você quer pagar?</h1>
         <p class="en">How would you like to pay?</p>
+        <p class="mesmo-valor esconde" id="mesmo-valor">Mesmo valor no Pix ou no cartão (até 10x sem juros). <span class="en">Same total with Pix or card.</span></p>
         <div class="metodos" id="metodos" role="radiogroup" aria-label="Forma de pagamento" style="margin-top:16px"></div>
         <button class="btn btn-p" id="btn-pagar" type="button"></button>
         <p class="nota"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -184,6 +188,7 @@
         <textarea id="pix-codigo" readonly aria-label="Código Pix copia e cola"></textarea>
         <div class="botoes">
           <button class="btn btn-p" id="btn-copiar" type="button">Copiar código Pix</button>
+          <button class="btn btn-s js-trocar esconde" type="button">Prefiro outra forma de pagamento</button>
         </div>
         <ol class="passos">
           <li>Abra o app do seu banco e escolha <strong>Pix</strong>.</li>
@@ -203,6 +208,7 @@
         <p class="suave" style="margin-top:14px"><span class="pulso" aria-hidden="true"></span>Aguardando a confirmação…</p>
         <div class="botoes">
           <a class="btn btn-p" id="btn-reabrir" href="#" target="_blank" rel="noopener noreferrer">Abrir a página de pagamento</a>
+          <button class="btn btn-s js-trocar esconde" type="button">Prefiro outra forma de pagamento</button>
         </div>
       </div>
 
@@ -326,8 +332,10 @@
   function selecionar(m) {
     escolhido = m;
     var bs = $("metodos").querySelectorAll(".metodo");
-    for (var i = 0; i < bs.length; i++) bs[i].setAttribute("aria-checked", bs[i].dataset.id === m.id ? "true" : "false");
-    $("btn-pagar").textContent = rotuloBotao(m);
+    for (var i = 0; i < bs.length; i++) bs[i].setAttribute("aria-checked", m && bs[i].dataset.id === m.id ? "true" : "false");
+    $("btn-pagar").disabled = !m;
+    $("btn-pagar").textContent = m ? rotuloBotao(m) : "Escolha a forma de pagamento";
+    if (!m) { $("nota-metodo").textContent = "Pix ou cartão: o valor é o mesmo. Os dados do cartão são digitados no ambiente seguro do sistema de pagamento."; return; }
     $("nota-metodo").textContent = m.id === "pix"
       ? "O Pix é gerado em nome da Florida Rental Car. Confira o nome antes de pagar."
       : "Os dados do cartão são digitados no ambiente seguro do sistema de pagamento. A FRC não vê nem guarda o número do seu cartão.";
@@ -345,6 +353,7 @@
       var ic = document.createElement("span"); ic.className = "ic"; ic.innerHTML = ICONES[m.id] || ICONES.cartao;
       var tx = document.createElement("span");
       var h = document.createElement("h3"); h.textContent = m.titulo;
+      if (m.marcado && x.metodos.length > 1) { var c = document.createElement("span"); c.className = "combinado"; c.textContent = "Combinado com você"; h.appendChild(c); }
       var d = document.createElement("span"); d.className = "det"; d.textContent = m.detalhe + " · " + m.titulo_en;
       tx.appendChild(h); tx.appendChild(d);
       var selo = document.createElement("span"); selo.className = "selo"; selo.textContent = moeda(m.valor, m.moeda);
@@ -352,7 +361,13 @@
       b.addEventListener("click", function () { selecionar(m); });
       box.appendChild(b);
     });
-    if (x.metodos[0]) selecionar(x.metodos[0]);
+    // Fase 2: a forma escolhida na conversa já vem ativada; forma só "padrão" = o cliente escolhe (nenhuma marcada)
+    var varios = x.metodos.length > 1;
+    var marcado = x.metodos.filter(function (m) { return m.marcado; })[0];
+    selecionar(varios ? (marcado || null) : x.metodos[0]);
+    $("mesmo-valor").classList.toggle("esconde", !varios);
+    var ts = document.querySelectorAll(".js-trocar");
+    for (var t = 0; t < ts.length; t++) ts[t].classList.toggle("esconde", !varios);
     if (x.expira_em) {
       $("nota-validade").textContent = "Este link de pagamento vale até " + dataLocal(x.expira_em) + " (horário do seu aparelho).";
       $("nota-validade").classList.remove("esconde");
@@ -458,7 +473,16 @@
     var aba = escolhido.id === "pix" ? null : window.open("", "_blank");
     api({ acao: "escolher", c: codigo, metodo: escolhido.id }).then(function (d) {
       btn.disabled = false; btn.textContent = rotuloBotao(escolhido);
-      if (!d.ok) { if (aba) aba.close(); if (!reagir(d.estado)) telaInforme("erro", dados); return; }
+      if (!d.ok) {
+        if (aba) aba.close();
+        if (reagir(d.estado)) return;
+        // Fase 2: forma indisponível agora (ou o provedor não respondeu) — fica na escolha para tentar outra
+        if (dados && dados.metodos && dados.metodos.length > 1 && (d.erro === "metodo_indisponivel" || d.estado === "indisponivel")) {
+          toast("Esta forma não está disponível agora. Tente de novo ou escolha outra.");
+          return;
+        }
+        telaInforme("erro", dados); return;
+      }
       if (d.tipo === "pix") {
         var svg = String(d.qr_svg || "");
         $("pix-qr").innerHTML = /^<svg [^<]*><rect [^<]*\/><path d="[Mhv0-9 z-]*" fill="#000"\/><\/svg>$/.test(svg) ? svg : "";
@@ -489,6 +513,11 @@
 
   $("btn-pagar").addEventListener("click", pagar);
   $("btn-tentar").addEventListener("click", function () { bloco("bloco-escolha"); pararPolling(); });
+  // Trocar de forma: volta para a escolha. O status continua sendo conferido (se a forma anterior for paga, o informe aparece).
+  var trocas = document.querySelectorAll(".js-trocar");
+  for (var k = 0; k < trocas.length; k++) trocas[k].addEventListener("click", function () {
+    bloco("bloco-escolha"); $("btn-copiar").textContent = "Copiar código Pix"; window.scrollTo(0, 0);
+  });
   $("btn-copiar").addEventListener("click", function () {
     var t = $("pix-codigo"); t.select();
     var feito = function () { toast("Código Pix copiado"); $("btn-copiar").textContent = "Código copiado ✓"; };
