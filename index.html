@@ -469,8 +469,9 @@
     if (!escolhido) return;
     var btn = $("btn-pagar");
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Preparando…';
-    // Abre a aba já no clique (o navegador só deixa abrir aba nova direto no clique); o endereço chega depois
-    var aba = escolhido.id === "pix" ? null : window.open("", "_blank");
+    // 19/11: sem aba nova. No navegador do WhatsApp/Instagram a aba vazia não navega e o cliente
+    // ficava preso nesta tela ("carrega e volta"). O cartão abre sempre na mesma aba.
+    var aba = null;
     api({ acao: "escolher", c: codigo, metodo: escolhido.id }).then(function (d) {
       btn.disabled = false; btn.textContent = rotuloBotao(escolhido);
       if (!d.ok) {
