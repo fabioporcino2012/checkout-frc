@@ -1,0 +1,6 @@
+interface:
+  display_name: "Autopilot FRC"
+  short_description: "Pedido de ponta a ponta no padrão FRC"
+  default_prompt: "Use $autopilot para executar este pedido de ponta a ponta."
+policy:
+  allow_implicit_invocation: false
